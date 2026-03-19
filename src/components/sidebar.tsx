@@ -156,14 +156,13 @@ export function Sidebar() {
       if (res.ok) {
         const data = await res.json();
         setLabels(data);
+        // Compute task counts per label
         const counts: TasksByLabel = {};
         for (const label of data) {
-          const countRes = await fetch(`/api/labels/${label.id}/tasks`);
+          const countRes = await fetch(`/api/tasks?labelId=${label.id}&showCompleted=false`);
           if (countRes.ok) {
             const tasks = await countRes.json();
-            counts[label.id] = tasks.filter(
-              (t: { completed: boolean }) => !t.completed,
-            ).length;
+            counts[label.id] = tasks.length;
           }
         }
         setTasksByLabel(counts);

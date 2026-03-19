@@ -2,8 +2,10 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 
-const DB_DIR = path.join(process.cwd(), 'data');
-const DB_PATH = path.join(DB_DIR, 'planner.db');
+const DB_DIR = process.env.PLANNER_DB_PATH
+  ? path.dirname(process.env.PLANNER_DB_PATH)
+  : path.join(process.cwd(), 'data');
+const DB_PATH = process.env.PLANNER_DB_PATH || path.join(DB_DIR, 'planner.db');
 
 let db: Database.Database | null = null;
 

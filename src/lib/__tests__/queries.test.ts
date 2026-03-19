@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, afterAll } from 'bun:test';
+import { describe, it, beforeEach, after } from 'node:test';
+import assert from 'node:assert/strict';
 import fs from 'fs';
 import path from 'path';
 
@@ -13,15 +14,17 @@ function cleanupTestDb() {
   }
 }
 
-// Set env and force re-import by deleting module cache
+// Set env and force re-import by clearing module cache
 process.env.PLANNER_DB_PATH = TEST_DB_PATH;
 
 // Clear any cached db module so it picks up the new env var
-delete require.cache[require.resolve('../db')];
-delete require.cache[require.resolve('../queries')];
+const dbResolved = require.resolve('../db');
+const queriesResolved = require.resolve('../queries');
+delete require.cache[dbResolved];
+delete require.cache[queriesResolved];
 
-import { resetDatabase } from '../db';
-import {
+const { resetDatabase } = require('../db');
+const {
   getLists,
   getListById,
   createList,
@@ -50,10 +53,10 @@ import {
   getAuditLogs,
   createAuditLog,
   searchTasks,
-} from '../queries';
+} = require('../queries');
 
 // Helper to get the test inbox id
-function getInboxId(): string {
+function getInboxId() {
   const lists = getLists();
   const inbox = lists.find((l) => l.isInbox);
   if (!inbox) throw new Error('Inbox not found');
@@ -61,7 +64,7 @@ function getInboxId(): string {
 }
 
 // Helper to create a task with minimal required fields
-function makeTask(title: string, overrides?: Partial<Parameters<typeof createTask>[0]>) {
+function makeTask(title, overrides = {}) {
   const inboxId = getInboxId();
   return createTask({
     title,
@@ -83,12 +86,11 @@ function makeTask(title: string, overrides?: Partial<Parameters<typeof createTas
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
-  // Close any existing connection, delete test DB, reinitialize
   resetDatabase();
   cleanupTestDb();
 });
 
-afterAll(() => {
+after(() => {
   resetDatabase();
   cleanupTestDb();
   delete process.env.PLANNER_DB_PATH;
@@ -101,75 +103,75 @@ afterAll(() => {
 describe('Lists', () => {
   it('getLists returns array including seeded Inbox', () => {
     const lists = getLists();
-    expect(Array.isArray(lists)).toBe(true);
-    expect(lists.length).toBeGreaterThanOrEqual(1);
+    assert.ok(Array.isArray(lists));
+    assert.ok(lists.length >= 1);
     const inbox = lists.find((l) => l.isInbox);
-    expect(inbox).toBeDefined();
-    expect(inbox!.name).toBe('Inbox');
+    assert.ok(inbox);
+    assert.strictEqual(inbox.name, 'Inbox');
   });
 
   it('getListById returns correct list', () => {
     const inboxId = getInboxId();
     const list = getListById(inboxId);
-    expect(list).not.toBeNull();
-    expect(list!.id).toBe(inboxId);
-    expect(list!.name).toBe('Inbox');
-    expect(list!.isInbox).toBe(true);
+    assert.ok(list);
+    assert.strictEqual(list.id, inboxId);
+    assert.strictEqual(list.name, 'Inbox');
+    assert.strictEqual(list.isInbox, true);
   });
 
   it('getListById returns null for nonexistent id', () => {
-    expect(getListById('nonexistent-id')).toBeNull();
+    assert.strictEqual(getListById('nonexistent-id'), null);
   });
 
   it('createList creates a new list', () => {
     const list = createList({ name: 'Work', color: '#ff0000', emoji: '💼' });
-    expect(list.id).toBeDefined();
-    expect(list.name).toBe('Work');
-    expect(list.color).toBe('#ff0000');
-    expect(list.emoji).toBe('💼');
-    expect(list.isInbox).toBe(false);
-    expect(list.createdAt).toBeDefined();
-    expect(list.updatedAt).toBeDefined();
+    assert.ok(list.id);
+    assert.strictEqual(list.name, 'Work');
+    assert.strictEqual(list.color, '#ff0000');
+    assert.strictEqual(list.emoji, '💼');
+    assert.strictEqual(list.isInbox, false);
+    assert.ok(list.createdAt);
+    assert.ok(list.updatedAt);
 
     const found = getListById(list.id);
-    expect(found).not.toBeNull();
-    expect(found!.name).toBe('Work');
+    assert.ok(found);
+    assert.strictEqual(found.name, 'Work');
   });
 
   it('updateList updates list properties', () => {
     const list = createList({ name: 'Old Name', color: '#000000', emoji: '📁' });
     const updated = updateList(list.id, { name: 'New Name', color: '#ffffff' });
-    expect(updated).not.toBeNull();
-    expect(updated!.name).toBe('New Name');
-    expect(updated!.color).toBe('#ffffff');
-    expect(updated!.emoji).toBe('📁');
+    assert.ok(updated);
+    assert.strictEqual(updated.name, 'New Name');
+    assert.strictEqual(updated.color, '#ffffff');
+    assert.strictEqual(updated.emoji, '📁');
   });
 
   it('updateList returns null for nonexistent id', () => {
-    expect(updateList('nonexistent', { name: 'X' })).toBeNull();
+    assert.strictEqual(updateList('nonexistent', { name: 'X' }), null);
   });
 
   it('updateList with empty data returns existing list unchanged', () => {
     const list = createList({ name: 'Test', color: '#000', emoji: '📁' });
     const updated = updateList(list.id, {});
-    expect(updated).not.toBeNull();
-    expect(updated!.name).toBe('Test');
+    assert.ok(updated);
+    assert.strictEqual(updated.name, 'Test');
   });
 
   it('deleteList deletes non-inbox list', () => {
     const list = createList({ name: 'ToDelete', color: '#000', emoji: '🗑️' });
-    expect(deleteList(list.id)).toBe(true);
-    expect(getListById(list.id)).toBeNull();
+    assert.strictEqual(deleteList(list.id), true);
+    assert.strictEqual(getListById(list.id), null);
   });
 
   it('deleteList fails for inbox list', () => {
     const inboxId = getInboxId();
-    expect(deleteList(inboxId)).toBe(false);
-    expect(getListById(inboxId)).not.toBeNull();
+    assert.strictEqual(deleteList(inboxId), false);
+    assert.ok(getListById(inboxId));
   });
 
   it('deleteList returns false for nonexistent id', () => {
-    expect(deleteList('nonexistent-id')).toBe(false);
+    assert.strictEqual(deleteList('nonexistent-id'), false);
   });
 });
 
@@ -180,62 +182,62 @@ describe('Lists', () => {
 describe('Labels', () => {
   it('getLabels returns empty array initially', () => {
     const labels = getLabels();
-    expect(Array.isArray(labels)).toBe(true);
-    expect(labels.length).toBe(0);
+    assert.ok(Array.isArray(labels));
+    assert.strictEqual(labels.length, 0);
   });
 
   it('createLabel creates a new label', () => {
     const label = createLabel({ name: 'Urgent', color: '#ff0000', icon: 'alert' });
-    expect(label.id).toBeDefined();
-    expect(label.name).toBe('Urgent');
-    expect(label.color).toBe('#ff0000');
-    expect(label.icon).toBe('alert');
-    expect(label.createdAt).toBeDefined();
-    expect(label.updatedAt).toBeDefined();
+    assert.ok(label.id);
+    assert.strictEqual(label.name, 'Urgent');
+    assert.strictEqual(label.color, '#ff0000');
+    assert.strictEqual(label.icon, 'alert');
+    assert.ok(label.createdAt);
+    assert.ok(label.updatedAt);
   });
 
   it('getLabels returns labels sorted by name', () => {
     createLabel({ name: 'Zebra', color: '#000', icon: 'tag' });
     createLabel({ name: 'Alpha', color: '#000', icon: 'tag' });
     const labels = getLabels();
-    expect(labels.length).toBe(2);
-    expect(labels[0].name).toBe('Alpha');
-    expect(labels[1].name).toBe('Zebra');
+    assert.strictEqual(labels.length, 2);
+    assert.strictEqual(labels[0].name, 'Alpha');
+    assert.strictEqual(labels[1].name, 'Zebra');
   });
 
   it('getLabelById returns correct label', () => {
     const label = createLabel({ name: 'Test', color: '#000', icon: 'tag' });
     const found = getLabelById(label.id);
-    expect(found).not.toBeNull();
-    expect(found!.id).toBe(label.id);
-    expect(found!.name).toBe('Test');
+    assert.ok(found);
+    assert.strictEqual(found.id, label.id);
+    assert.strictEqual(found.name, 'Test');
   });
 
   it('getLabelById returns null for nonexistent id', () => {
-    expect(getLabelById('nonexistent')).toBeNull();
+    assert.strictEqual(getLabelById('nonexistent'), null);
   });
 
   it('updateLabel updates label properties', () => {
     const label = createLabel({ name: 'Old', color: '#000', icon: 'tag' });
     const updated = updateLabel(label.id, { name: 'New', color: '#fff' });
-    expect(updated).not.toBeNull();
-    expect(updated!.name).toBe('New');
-    expect(updated!.color).toBe('#fff');
-    expect(updated!.icon).toBe('tag');
+    assert.ok(updated);
+    assert.strictEqual(updated.name, 'New');
+    assert.strictEqual(updated.color, '#fff');
+    assert.strictEqual(updated.icon, 'tag');
   });
 
   it('updateLabel returns null for nonexistent id', () => {
-    expect(updateLabel('nonexistent', { name: 'X' })).toBeNull();
+    assert.strictEqual(updateLabel('nonexistent', { name: 'X' }), null);
   });
 
   it('deleteLabel deletes a label', () => {
     const label = createLabel({ name: 'ToDelete', color: '#000', icon: 'tag' });
-    expect(deleteLabel(label.id)).toBe(true);
-    expect(getLabelById(label.id)).toBeNull();
+    assert.strictEqual(deleteLabel(label.id), true);
+    assert.strictEqual(getLabelById(label.id), null);
   });
 
   it('deleteLabel returns false for nonexistent id', () => {
-    expect(deleteLabel('nonexistent')).toBe(false);
+    assert.strictEqual(deleteLabel('nonexistent'), false);
   });
 });
 
@@ -246,8 +248,8 @@ describe('Labels', () => {
 describe('Tasks', () => {
   it('getTasks returns empty array initially', () => {
     const tasks = getTasks();
-    expect(Array.isArray(tasks)).toBe(true);
-    expect(tasks.length).toBe(0);
+    assert.ok(Array.isArray(tasks));
+    assert.strictEqual(tasks.length, 0);
   });
 
   it('createTask creates a task with all fields', () => {
@@ -265,45 +267,45 @@ describe('Tasks', () => {
       recurringCustom: null,
     });
 
-    expect(task.id).toBeDefined();
-    expect(task.title).toBe('Test Task');
-    expect(task.description).toBe('A description');
-    expect(task.listId).toBe(inboxId);
-    expect(task.completed).toBe(false);
-    expect(task.priority).toBe('high');
-    expect(task.date).toBe('2026-03-20');
-    expect(task.deadline).toBe('2026-03-25');
-    expect(task.estimate).toBe('02:00');
-    expect(task.recurring).toBe('daily');
-    expect(task.sortOrder).toBe(1);
-    expect(task.completedAt).toBeNull();
+    assert.ok(task.id);
+    assert.strictEqual(task.title, 'Test Task');
+    assert.strictEqual(task.description, 'A description');
+    assert.strictEqual(task.listId, inboxId);
+    assert.strictEqual(task.completed, false);
+    assert.strictEqual(task.priority, 'high');
+    assert.strictEqual(task.date, '2026-03-20');
+    assert.strictEqual(task.deadline, '2026-03-25');
+    assert.strictEqual(task.estimate, '02:00');
+    assert.strictEqual(task.recurring, 'daily');
+    assert.strictEqual(task.sortOrder, 1);
+    assert.strictEqual(task.completedAt, null);
   });
 
   it('createTask with minimal fields uses defaults', () => {
     const task = makeTask('Minimal');
-    expect(task.title).toBe('Minimal');
-    expect(task.description).toBeNull();
-    expect(task.priority).toBe('none');
-    expect(task.date).toBeNull();
-    expect(task.deadline).toBeNull();
-    expect(task.estimate).toBeNull();
-    expect(task.recurring).toBeNull();
+    assert.strictEqual(task.title, 'Minimal');
+    assert.strictEqual(task.description, null);
+    assert.strictEqual(task.priority, 'none');
+    assert.strictEqual(task.date, null);
+    assert.strictEqual(task.deadline, null);
+    assert.strictEqual(task.estimate, null);
+    assert.strictEqual(task.recurring, null);
   });
 
   it('getTaskById returns task with relations', () => {
     const task = makeTask('With Relations');
     const found = getTaskById(task.id);
-    expect(found).not.toBeNull();
-    expect(found!.id).toBe(task.id);
-    expect(found!.list).toBeDefined();
-    expect(found!.list!.name).toBe('Inbox');
-    expect(found!.subtasks).toEqual([]);
-    expect(found!.labels).toEqual([]);
-    expect(found!.reminders).toEqual([]);
+    assert.ok(found);
+    assert.strictEqual(found.id, task.id);
+    assert.ok(found.list);
+    assert.strictEqual(found.list.name, 'Inbox');
+    assert.deepStrictEqual(found.subtasks, []);
+    assert.deepStrictEqual(found.labels, []);
+    assert.deepStrictEqual(found.reminders, []);
   });
 
   it('getTaskById returns null for nonexistent id', () => {
-    expect(getTaskById('nonexistent')).toBeNull();
+    assert.strictEqual(getTaskById('nonexistent'), null);
   });
 
   it('getTasks with listId filter', () => {
@@ -314,12 +316,12 @@ describe('Tasks', () => {
     makeTask('Work Task', { listId: list2.id });
 
     const inboxTasks = getTasks({ listId: inboxId });
-    expect(inboxTasks.length).toBe(1);
-    expect(inboxTasks[0].title).toBe('Inbox Task');
+    assert.strictEqual(inboxTasks.length, 1);
+    assert.strictEqual(inboxTasks[0].title, 'Inbox Task');
 
     const workTasks = getTasks({ listId: list2.id });
-    expect(workTasks.length).toBe(1);
-    expect(workTasks[0].title).toBe('Work Task');
+    assert.strictEqual(workTasks.length, 1);
+    assert.strictEqual(workTasks[0].title, 'Work Task');
   });
 
   it('getTasks with view=today filter', () => {
@@ -329,8 +331,8 @@ describe('Tasks', () => {
     makeTask('Other Day Task', { date: '2026-01-01' });
 
     const todayTasks = getTasks({ view: 'today' });
-    expect(todayTasks.length).toBe(1);
-    expect(todayTasks[0].title).toBe('Today Task');
+    assert.strictEqual(todayTasks.length, 1);
+    assert.strictEqual(todayTasks[0].title, 'Today Task');
   });
 
   it('getTasks with view=all filter returns all tasks', () => {
@@ -338,18 +340,18 @@ describe('Tasks', () => {
     makeTask('Task 2', { date: '2026-12-31' });
 
     const allTasks = getTasks({ view: 'all' });
-    expect(allTasks.length).toBe(2);
+    assert.strictEqual(allTasks.length, 2);
   });
 
   it('getTasks default hides completed tasks', () => {
-    const t1 = makeTask('Active');
+    makeTask('Active');
     const t2 = makeTask('Will Complete');
 
     toggleTaskComplete(t2.id);
 
     const activeOnly = getTasks();
-    expect(activeOnly.length).toBe(1);
-    expect(activeOnly[0].title).toBe('Active');
+    assert.strictEqual(activeOnly.length, 1);
+    assert.strictEqual(activeOnly[0].title, 'Active');
   });
 
   it('getTasks with showCompleted=true returns all', () => {
@@ -359,28 +361,28 @@ describe('Tasks', () => {
     toggleTaskComplete(t2.id);
 
     const allTasks = getTasks({ showCompleted: true });
-    expect(allTasks.length).toBe(2);
+    assert.strictEqual(allTasks.length, 2);
   });
 
   it('toggleTaskComplete toggles completion', () => {
     const task = makeTask('Toggle Me');
 
-    expect(task.completed).toBe(false);
-    expect(task.completedAt).toBeNull();
+    assert.strictEqual(task.completed, false);
+    assert.strictEqual(task.completedAt, null);
 
     const completed = toggleTaskComplete(task.id);
-    expect(completed).not.toBeNull();
-    expect(completed!.completed).toBe(true);
-    expect(completed!.completedAt).not.toBeNull();
+    assert.ok(completed);
+    assert.strictEqual(completed.completed, true);
+    assert.ok(completed.completedAt);
 
     const uncompleted = toggleTaskComplete(task.id);
-    expect(uncompleted).not.toBeNull();
-    expect(uncompleted!.completed).toBe(false);
-    expect(uncompleted!.completedAt).toBeNull();
+    assert.ok(uncompleted);
+    assert.strictEqual(uncompleted.completed, false);
+    assert.strictEqual(uncompleted.completedAt, null);
   });
 
   it('toggleTaskComplete returns null for nonexistent id', () => {
-    expect(toggleTaskComplete('nonexistent')).toBeNull();
+    assert.strictEqual(toggleTaskComplete('nonexistent'), null);
   });
 
   it('updateTask updates task fields', () => {
@@ -393,32 +395,32 @@ describe('Tasks', () => {
       date: '2026-06-15',
     });
 
-    expect(updated).not.toBeNull();
-    expect(updated!.title).toBe('Updated');
-    expect(updated!.priority).toBe('high');
-    expect(updated!.description).toBe('New desc');
-    expect(updated!.date).toBe('2026-06-15');
+    assert.ok(updated);
+    assert.strictEqual(updated.title, 'Updated');
+    assert.strictEqual(updated.priority, 'high');
+    assert.strictEqual(updated.description, 'New desc');
+    assert.strictEqual(updated.date, '2026-06-15');
   });
 
   it('updateTask returns null for nonexistent id', () => {
-    expect(updateTask('nonexistent', { title: 'X' })).toBeNull();
+    assert.strictEqual(updateTask('nonexistent', { title: 'X' }), null);
   });
 
   it('updateTask with empty data returns existing task', () => {
     const task = makeTask('Test');
     const updated = updateTask(task.id, {});
-    expect(updated).not.toBeNull();
-    expect(updated!.title).toBe('Test');
+    assert.ok(updated);
+    assert.strictEqual(updated.title, 'Test');
   });
 
   it('deleteTask deletes a task', () => {
     const task = makeTask('Delete Me');
-    expect(deleteTask(task.id)).toBe(true);
-    expect(getTaskById(task.id)).toBeNull();
+    assert.strictEqual(deleteTask(task.id), true);
+    assert.strictEqual(getTaskById(task.id), null);
   });
 
   it('deleteTask returns false for nonexistent id', () => {
-    expect(deleteTask('nonexistent')).toBe(false);
+    assert.strictEqual(deleteTask('nonexistent'), false);
   });
 
   it('getOverdueTasks returns overdue tasks', () => {
@@ -435,8 +437,8 @@ describe('Tasks', () => {
     makeTask('No Date Task', { date: null });
 
     const overdue = getOverdueTasks();
-    expect(overdue.length).toBe(1);
-    expect(overdue[0].title).toBe('Overdue Task');
+    assert.strictEqual(overdue.length, 1);
+    assert.strictEqual(overdue[0].title, 'Overdue Task');
   });
 
   it('getOverdueTasks excludes completed overdue tasks', () => {
@@ -448,22 +450,22 @@ describe('Tasks', () => {
     toggleTaskComplete(task.id);
 
     const overdue = getOverdueTasks();
-    expect(overdue.length).toBe(0);
+    assert.strictEqual(overdue.length, 0);
   });
 
   it('createTask auto-increments sortOrder per list', () => {
     const t1 = makeTask('First');
     const t2 = makeTask('Second');
 
-    expect(t1.sortOrder).toBe(1);
-    expect(t2.sortOrder).toBe(2);
+    assert.strictEqual(t1.sortOrder, 1);
+    assert.strictEqual(t2.sortOrder, 2);
   });
 
   it('updateTask can update sort order', () => {
     const task = makeTask('Reorder');
     const updated = updateTask(task.id, { sortOrder: 99 });
-    expect(updated).not.toBeNull();
-    expect(updated!.sortOrder).toBe(99);
+    assert.ok(updated);
+    assert.strictEqual(updated.sortOrder, 99);
   });
 
   it('updateTask can update recurring fields', () => {
@@ -472,9 +474,9 @@ describe('Tasks', () => {
       recurring: 'weekly',
       recurringCustom: 'every 2 weeks on Monday',
     });
-    expect(updated).not.toBeNull();
-    expect(updated!.recurring).toBe('weekly');
-    expect(updated!.recurringCustom).toBe('every 2 weeks on Monday');
+    assert.ok(updated);
+    assert.strictEqual(updated.recurring, 'weekly');
+    assert.strictEqual(updated.recurringCustom, 'every 2 weeks on Monday');
   });
 
   it('updateTask can update estimate and actualTime', () => {
@@ -483,9 +485,9 @@ describe('Tasks', () => {
       estimate: '01:30',
       actualTime: '02:15',
     });
-    expect(updated).not.toBeNull();
-    expect(updated!.estimate).toBe('01:30');
-    expect(updated!.actualTime).toBe('02:15');
+    assert.ok(updated);
+    assert.strictEqual(updated.estimate, '01:30');
+    assert.strictEqual(updated.actualTime, '02:15');
   });
 });
 
@@ -494,7 +496,7 @@ describe('Tasks', () => {
 // ===========================================================================
 
 describe('Subtasks', () => {
-  let taskId: string;
+  let taskId;
 
   beforeEach(() => {
     taskId = makeTask('Parent Task').id;
@@ -502,19 +504,19 @@ describe('Subtasks', () => {
 
   it('createSubtask creates a subtask', () => {
     const subtask = createSubtask(taskId, 'Sub 1');
-    expect(subtask.id).toBeDefined();
-    expect(subtask.taskId).toBe(taskId);
-    expect(subtask.title).toBe('Sub 1');
-    expect(subtask.completed).toBe(false);
-    expect(subtask.sortOrder).toBe(1);
-    expect(subtask.createdAt).toBeDefined();
+    assert.ok(subtask.id);
+    assert.strictEqual(subtask.taskId, taskId);
+    assert.strictEqual(subtask.title, 'Sub 1');
+    assert.strictEqual(subtask.completed, false);
+    assert.strictEqual(subtask.sortOrder, 1);
+    assert.ok(subtask.createdAt);
   });
 
   it('createSubtask auto-increments sortOrder', () => {
     const s1 = createSubtask(taskId, 'First');
     const s2 = createSubtask(taskId, 'Second');
-    expect(s1.sortOrder).toBe(1);
-    expect(s2.sortOrder).toBe(2);
+    assert.strictEqual(s1.sortOrder, 1);
+    assert.strictEqual(s2.sortOrder, 2);
   });
 
   it('subtasks appear in parent task relations', () => {
@@ -522,64 +524,64 @@ describe('Subtasks', () => {
     createSubtask(taskId, 'Sub B');
 
     const task = getTaskById(taskId);
-    expect(task).not.toBeNull();
-    expect(task!.subtasks!.length).toBe(2);
-    expect(task!.subtasks![0].title).toBe('Sub A');
-    expect(task!.subtasks![1].title).toBe('Sub B');
+    assert.ok(task);
+    assert.strictEqual(task.subtasks.length, 2);
+    assert.strictEqual(task.subtasks[0].title, 'Sub A');
+    assert.strictEqual(task.subtasks[1].title, 'Sub B');
   });
 
   it('toggleSubtaskComplete toggles subtask', () => {
     const subtask = createSubtask(taskId, 'Toggle Me');
-    expect(subtask.completed).toBe(false);
+    assert.strictEqual(subtask.completed, false);
 
     const toggled = toggleSubtaskComplete(subtask.id);
-    expect(toggled).not.toBeNull();
-    expect(toggled!.completed).toBe(true);
+    assert.ok(toggled);
+    assert.strictEqual(toggled.completed, true);
 
     const toggledBack = toggleSubtaskComplete(subtask.id);
-    expect(toggledBack).not.toBeNull();
-    expect(toggledBack!.completed).toBe(false);
+    assert.ok(toggledBack);
+    assert.strictEqual(toggledBack.completed, false);
   });
 
   it('toggleSubtaskComplete returns null for nonexistent id', () => {
-    expect(toggleSubtaskComplete('nonexistent')).toBeNull();
+    assert.strictEqual(toggleSubtaskComplete('nonexistent'), null);
   });
 
   it('updateSubtask updates subtask', () => {
     const subtask = createSubtask(taskId, 'Old Title');
     const updated = updateSubtask(subtask.id, { title: 'New Title' });
-    expect(updated).not.toBeNull();
-    expect(updated!.title).toBe('New Title');
+    assert.ok(updated);
+    assert.strictEqual(updated.title, 'New Title');
   });
 
   it('updateSubtask updates completed status', () => {
     const subtask = createSubtask(taskId, 'Test');
     const updated = updateSubtask(subtask.id, { completed: true });
-    expect(updated).not.toBeNull();
-    expect(updated!.completed).toBe(true);
+    assert.ok(updated);
+    assert.strictEqual(updated.completed, true);
   });
 
   it('updateSubtask returns null for nonexistent id', () => {
-    expect(updateSubtask('nonexistent', { title: 'X' })).toBeNull();
+    assert.strictEqual(updateSubtask('nonexistent', { title: 'X' }), null);
   });
 
   it('updateSubtask with empty data returns existing subtask', () => {
     const subtask = createSubtask(taskId, 'Test');
     const updated = updateSubtask(subtask.id, {});
-    expect(updated).not.toBeNull();
-    expect(updated!.title).toBe('Test');
+    assert.ok(updated);
+    assert.strictEqual(updated.title, 'Test');
   });
 
   it('deleteSubtask deletes subtask', () => {
     const subtask = createSubtask(taskId, 'Delete Me');
-    expect(deleteSubtask(subtask.id)).toBe(true);
+    assert.strictEqual(deleteSubtask(subtask.id), true);
 
     const task = getTaskById(taskId);
-    expect(task!.subtasks!.length).toBe(0);
+    assert.strictEqual(task.subtasks.length, 0);
   });
 
   it('deleteSubtask returns false for nonexistent id', () => {
-    expect(deleteSubtask('nonexistent')).toBe(false);
+    assert.strictEqual(deleteSubtask('nonexistent'), false);
   });
 });
 
@@ -588,8 +590,8 @@ describe('Subtasks', () => {
 // ===========================================================================
 
 describe('Task Labels', () => {
-  let taskId: string;
-  let labelId: string;
+  let taskId;
+  let labelId;
 
   beforeEach(() => {
     taskId = makeTask('Labelled Task').id;
@@ -600,10 +602,10 @@ describe('Task Labels', () => {
     addLabelToTask(taskId, labelId);
 
     const task = getTaskById(taskId);
-    expect(task).not.toBeNull();
-    expect(task!.labels!.length).toBe(1);
-    expect(task!.labels![0].id).toBe(labelId);
-    expect(task!.labels![0].name).toBe('Test Label');
+    assert.ok(task);
+    assert.strictEqual(task.labels.length, 1);
+    assert.strictEqual(task.labels[0].id, labelId);
+    assert.strictEqual(task.labels[0].name, 'Test Label');
   });
 
   it('addLabelToTask is idempotent', () => {
@@ -611,7 +613,7 @@ describe('Task Labels', () => {
     addLabelToTask(taskId, labelId);
 
     const task = getTaskById(taskId);
-    expect(task!.labels!.length).toBe(1);
+    assert.strictEqual(task.labels.length, 1);
   });
 
   it('removeLabelFromTask removes a label', () => {
@@ -619,7 +621,7 @@ describe('Task Labels', () => {
     removeLabelFromTask(taskId, labelId);
 
     const task = getTaskById(taskId);
-    expect(task!.labels!.length).toBe(0);
+    assert.strictEqual(task.labels.length, 0);
   });
 
   it('removeLabelFromTask is idempotent', () => {
@@ -628,7 +630,7 @@ describe('Task Labels', () => {
     removeLabelFromTask(taskId, labelId);
 
     const task = getTaskById(taskId);
-    expect(task!.labels!.length).toBe(0);
+    assert.strictEqual(task.labels.length, 0);
   });
 
   it('getTasks with labelId filter', () => {
@@ -639,8 +641,8 @@ describe('Task Labels', () => {
     addLabelToTask(task2.id, label2.id);
 
     const filtered = getTasks({ labelId: labelId });
-    expect(filtered.length).toBe(1);
-    expect(filtered[0].id).toBe(taskId);
+    assert.strictEqual(filtered.length, 1);
+    assert.strictEqual(filtered[0].id, taskId);
   });
 });
 
@@ -649,7 +651,7 @@ describe('Task Labels', () => {
 // ===========================================================================
 
 describe('Reminders', () => {
-  let taskId: string;
+  let taskId;
 
   beforeEach(() => {
     taskId = makeTask('Remind Me').id;
@@ -657,10 +659,10 @@ describe('Reminders', () => {
 
   it('createReminder creates a reminder', () => {
     const reminder = createReminder(taskId, '2026-03-20T10:00:00.000Z');
-    expect(reminder.id).toBeDefined();
-    expect(reminder.taskId).toBe(taskId);
-    expect(reminder.reminderAt).toBe('2026-03-20T10:00:00.000Z');
-    expect(reminder.createdAt).toBeDefined();
+    assert.ok(reminder.id);
+    assert.strictEqual(reminder.taskId, taskId);
+    assert.strictEqual(reminder.reminderAt, '2026-03-20T10:00:00.000Z');
+    assert.ok(reminder.createdAt);
   });
 
   it('reminder appears in task relations sorted by reminder_at', () => {
@@ -668,22 +670,22 @@ describe('Reminders', () => {
     createReminder(taskId, '2026-03-20T10:00:00.000Z');
 
     const task = getTaskById(taskId);
-    expect(task).not.toBeNull();
-    expect(task!.reminders!.length).toBe(2);
-    expect(task!.reminders![0].reminderAt).toBe('2026-03-20T10:00:00.000Z');
-    expect(task!.reminders![1].reminderAt).toBe('2026-03-21T10:00:00.000Z');
+    assert.ok(task);
+    assert.strictEqual(task.reminders.length, 2);
+    assert.strictEqual(task.reminders[0].reminderAt, '2026-03-20T10:00:00.000Z');
+    assert.strictEqual(task.reminders[1].reminderAt, '2026-03-21T10:00:00.000Z');
   });
 
   it('deleteReminder deletes a reminder', () => {
     const reminder = createReminder(taskId, '2026-03-20T10:00:00.000Z');
-    expect(deleteReminder(reminder.id)).toBe(true);
+    assert.strictEqual(deleteReminder(reminder.id), true);
 
     const task = getTaskById(taskId);
-    expect(task!.reminders!.length).toBe(0);
+    assert.strictEqual(task.reminders.length, 0);
   });
 
   it('deleteReminder returns false for nonexistent id', () => {
-    expect(deleteReminder('nonexistent')).toBe(false);
+    assert.strictEqual(deleteReminder('nonexistent'), false);
   });
 });
 
@@ -692,7 +694,7 @@ describe('Reminders', () => {
 // ===========================================================================
 
 describe('Audit Log', () => {
-  let taskId: string;
+  let taskId;
 
   beforeEach(() => {
     taskId = makeTask('Audited Task').id;
@@ -700,8 +702,8 @@ describe('Audit Log', () => {
 
   it('getAuditLogs returns empty array initially', () => {
     const logs = getAuditLogs(taskId);
-    expect(Array.isArray(logs)).toBe(true);
-    expect(logs.length).toBe(0);
+    assert.ok(Array.isArray(logs));
+    assert.strictEqual(logs.length, 0);
   });
 
   it('createAuditLog creates an entry', () => {
@@ -713,13 +715,13 @@ describe('Audit Log', () => {
       newValue: null,
     });
 
-    expect(entry.id).toBeDefined();
-    expect(entry.taskId).toBe(taskId);
-    expect(entry.action).toBe('created');
-    expect(entry.field).toBeNull();
-    expect(entry.oldValue).toBeNull();
-    expect(entry.newValue).toBeNull();
-    expect(entry.createdAt).toBeDefined();
+    assert.ok(entry.id);
+    assert.strictEqual(entry.taskId, taskId);
+    assert.strictEqual(entry.action, 'created');
+    assert.strictEqual(entry.field, null);
+    assert.strictEqual(entry.oldValue, null);
+    assert.strictEqual(entry.newValue, null);
+    assert.ok(entry.createdAt);
   });
 
   it('createAuditLog with field changes records values', () => {
@@ -731,10 +733,10 @@ describe('Audit Log', () => {
       newValue: 'high',
     });
 
-    expect(entry.action).toBe('updated');
-    expect(entry.field).toBe('priority');
-    expect(entry.oldValue).toBe('none');
-    expect(entry.newValue).toBe('high');
+    assert.strictEqual(entry.action, 'updated');
+    assert.strictEqual(entry.field, 'priority');
+    assert.strictEqual(entry.oldValue, 'none');
+    assert.strictEqual(entry.newValue, 'high');
   });
 
   it('getAuditLogs returns entries ordered by created_at DESC', () => {
@@ -745,9 +747,9 @@ describe('Audit Log', () => {
     createAuditLog({ taskId, action: 'updated', field: 'title', oldValue: 'Old', newValue: 'New' });
 
     const logs = getAuditLogs(taskId);
-    expect(logs.length).toBe(2);
-    expect(logs[0].action).toBe('updated');
-    expect(logs[1].action).toBe('created');
+    assert.strictEqual(logs.length, 2);
+    assert.strictEqual(logs[0].action, 'updated');
+    assert.strictEqual(logs[1].action, 'created');
   });
 
   it('getAuditLogs only returns entries for the specified task', () => {
@@ -757,12 +759,12 @@ describe('Audit Log', () => {
     createAuditLog({ taskId: task2.id, action: 'created', field: null, oldValue: null, newValue: null });
 
     const logs = getAuditLogs(taskId);
-    expect(logs.length).toBe(1);
-    expect(logs[0].taskId).toBe(taskId);
+    assert.strictEqual(logs.length, 1);
+    assert.strictEqual(logs[0].taskId, taskId);
   });
 
   it('supports all audit log action types', () => {
-    const actions = ['created', 'updated', 'completed', 'uncompleted', 'deleted', 'restored'] as const;
+    const actions = ['created', 'updated', 'completed', 'uncompleted', 'deleted', 'restored'];
 
     for (const action of actions) {
       const entry = createAuditLog({
@@ -772,11 +774,11 @@ describe('Audit Log', () => {
         oldValue: null,
         newValue: null,
       });
-      expect(entry.action).toBe(action);
+      assert.strictEqual(entry.action, action);
     }
 
     const logs = getAuditLogs(taskId);
-    expect(logs.length).toBe(actions.length);
+    assert.strictEqual(logs.length, actions.length);
   });
 });
 
@@ -793,54 +795,53 @@ describe('Search', () => {
 
   it('searchTasks finds tasks by title', () => {
     const results = searchTasks('groceries');
-    expect(results.length).toBe(1);
-    expect(results[0].task.title).toBe('Buy groceries');
-    expect(results[0].score).toBe(1);
-    expect(results[0].matches[0].field).toBe('title');
+    assert.strictEqual(results.length, 1);
+    assert.strictEqual(results[0].task.title, 'Buy groceries');
+    assert.strictEqual(results[0].score, 1);
+    assert.strictEqual(results[0].matches[0].field, 'title');
   });
 
   it('searchTasks finds tasks by description', () => {
     const results = searchTasks('financial');
-    expect(results.length).toBe(1);
-    expect(results[0].task.title).toBe('Write report');
-    expect(results[0].score).toBe(0.5);
-    expect(results[0].matches[0].field).toBe('description');
+    assert.strictEqual(results.length, 1);
+    assert.strictEqual(results[0].task.title, 'Write report');
+    assert.strictEqual(results[0].score, 0.5);
+    assert.strictEqual(results[0].matches[0].field, 'description');
   });
 
   it('searchTasks is case-insensitive', () => {
     const results = searchTasks('GROCERIES');
-    expect(results.length).toBe(1);
-    expect(results[0].task.title).toBe('Buy groceries');
+    assert.strictEqual(results.length, 1);
+    assert.strictEqual(results[0].task.title, 'Buy groceries');
   });
 
   it('searchTasks returns empty array for no matches', () => {
     const results = searchTasks('nonexistent query');
-    expect(results.length).toBe(0);
+    assert.strictEqual(results.length, 0);
   });
 
   it('searchTasks partial match works', () => {
     const results = searchTasks('repo');
-    expect(results.length).toBe(1);
-    expect(results[0].task.title).toBe('Write report');
+    assert.strictEqual(results.length, 1);
+    assert.strictEqual(results[0].task.title, 'Write report');
   });
 
   it('searchTasks finds multiple matches', () => {
-    // "Buy groceries" has 'r' in title, "Write report" has 'r' in title
+    // "Buy groceries" and "Write report" both have 'r' in title
     const results = searchTasks('r');
-    expect(results.length).toBe(2);
+    assert.strictEqual(results.length, 2);
   });
 
   it('searchTasks title match has higher score than description match', () => {
-    // "report" appears in title of "Write report"
     const results = searchTasks('report');
-    expect(results.length).toBe(1);
-    expect(results[0].score).toBe(1);
+    assert.strictEqual(results.length, 1);
+    assert.strictEqual(results[0].score, 1);
   });
 
   it('searchTasks returns task with all relations', () => {
     const results = searchTasks('groceries');
-    expect(results[0].task.list).toBeDefined();
-    expect(results[0].task.subtasks).toBeDefined();
-    expect(results[0].task.labels).toBeDefined();
+    assert.ok(results[0].task.list);
+    assert.ok(results[0].task.subtasks);
+    assert.ok(results[0].task.labels);
   });
 });

@@ -131,14 +131,13 @@ export function Sidebar() {
       if (res.ok) {
         const data = await res.json();
         setLists(data);
+        // Compute task counts per list
         const counts: TasksByList = {};
         for (const list of data) {
-          const countRes = await fetch(`/api/lists/${list.id}/tasks`);
+          const countRes = await fetch(`/api/tasks?listId=${list.id}&showCompleted=false`);
           if (countRes.ok) {
             const tasks = await countRes.json();
-            counts[list.id] = tasks.filter(
-              (t: { completed: boolean }) => !t.completed,
-            ).length;
+            counts[list.id] = tasks.length;
           }
         }
         setTasksByList(counts);

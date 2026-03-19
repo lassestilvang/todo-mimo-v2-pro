@@ -293,12 +293,8 @@ function TaskDetailContent({
             {/* Date */}
             <PropertyRow icon={Calendar} label="Date">
               <Popover open={dateOpen} onOpenChange={setDateOpen}>
-                <PopoverTrigger
-                  render={
-                    <Button variant="outline" size="sm" className="w-full justify-start text-left font-normal" />
-                  }
-                >
-                  <Calendar className="mr-2 size-3.5" />
+                <PopoverTrigger className="inline-flex h-7 w-full items-center justify-start gap-2 rounded-md border border-input bg-background px-2.5 text-sm font-normal hover:bg-accent hover:text-accent-foreground">
+                  <Calendar className="size-3.5" />
                   {task.date ? format(parseISO(task.date), 'MMM d, yyyy') : 'Pick a date'}
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
@@ -333,12 +329,8 @@ function TaskDetailContent({
             {/* Deadline */}
             <PropertyRow icon={Calendar} label="Deadline">
               <Popover open={deadlineOpen} onOpenChange={setDeadlineOpen}>
-                <PopoverTrigger
-                  render={
-                    <Button variant="outline" size="sm" className="w-full justify-start text-left font-normal" />
-                  }
-                >
-                  <Calendar className="mr-2 size-3.5" />
+                <PopoverTrigger className="inline-flex h-7 w-full items-center justify-start gap-2 rounded-md border border-input bg-background px-2.5 text-sm font-normal hover:bg-accent hover:text-accent-foreground">
+                  <Calendar className="size-3.5" />
                   {task.deadline ? format(parseISO(task.deadline), 'MMM d, yyyy') : 'Set deadline'}
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
@@ -573,11 +565,7 @@ function TaskDetailContent({
 
               {unassignedLabels.length > 0 && (
                 <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button variant="ghost" size="xs" className="h-5" />
-                    }
-                  >
+                  <DropdownMenuTrigger className="inline-flex h-5 items-center gap-1 rounded-md px-1.5 text-xs hover:bg-accent hover:text-accent-foreground">
                     <Plus className="size-3" />
                     Add
                   </DropdownMenuTrigger>
